@@ -53,6 +53,7 @@
 
 // standard includes
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <math.h>
 #include <time.h>
@@ -155,6 +156,12 @@ private:
   // optimization result as nav_msgs::Path
   nav_msgs::Path PSO_result_;
 
+  // log-file variables for statistical evaluation
+  ofstream log_file_;
+  std::string log_file_name_;
+  std::string log_file_path_;
+  bool stat_eval_called_;
+
 public:
 
   // constructor
@@ -182,6 +189,7 @@ public:
   // declaration of ros service servers
   ros::ServiceServer ss_start_PSO_;
   ros::ServiceServer ss_test_;
+  ros::ServiceServer ss_stat_eval_;
 
   // declaration of ros service clients
   ros::ServiceClient sc_get_map_;
@@ -214,6 +222,9 @@ public:
 
   // callback function for the test service
   bool testServiceCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
+
+  // callback function for the statistical evaluation
+  bool statEvaluationCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
 
   // callback functions
   void AoICB(const geometry_msgs::PolygonStamped::ConstPtr &AoI);
