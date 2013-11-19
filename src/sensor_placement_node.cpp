@@ -375,7 +375,8 @@ void sensor_placement_node::initializePSO()
     for(size_t i = 0; i < particle_swarm_.size(); i++)
     {     
       // initialize sensor poses randomly on perimeter
-      particle_swarm_.at(i).initializeSensorsOnPerimeter();
+      //particle_swarm_.at(i).initializeSensorsOnPerimeter();
+      particle_swarm_.at(i).initializeSensorsRandomly();
       // initialize sensor velocities randomly
       particle_swarm_.at(i).initializeRandomSensorVelocities();
       // get calculated coverage
@@ -409,7 +410,7 @@ void sensor_placement_node::PSOptimize()
   // iteration step
   // continue calculation as long as there are iteration steps left and actual best coverage is
   // lower than mininmal coverage to stop
-  while(iter < iter_max_ && best_cov_ < min_cov_)
+  while(iter <= iter_max_ && best_cov_ < min_cov_)
   {
     global_pose = global_best_.getSolutionPositions();
     // update each particle in vector
@@ -437,7 +438,7 @@ void sensor_placement_node::PSOptimize()
     ROS_INFO_STREAM("iteration: " << iter << " with coverage: " << best_cov_);
     if(stat_eval_called_)
     {
-      if(( iter % 50 ) == 0 )
+      if(( iter % 20 ) == 0 )
       {
         std::string temp = log_file_path_ + log_file_name_;
         log_file_.open(temp.c_str(), ios::out | ios::app);  
@@ -750,7 +751,7 @@ bool sensor_placement_node::statEvaluationCallback(std_srvs::Empty::Request& req
     ROS_INFO_STREAM("Saved " << targets_with_info_fix_.size() << " targets with info in std-vectors");
   }
   // loop to call PSO several times
-  for(int i=0; i<20; i++)
+  for(int i=0; i<75; i++)
   {
     // create File header
     log_file_.open(temp.c_str(), ios::out | ios::app);

@@ -468,6 +468,63 @@ void particle::initializeSensorsOnPerimeter()
   }
 }
 
+void particle::initializeSensorsRandomly()
+{
+  geometry_msgs::Pose newPose = geometry_msgs::Pose();
+  int cell_x;
+  int cell_y;
+  bool pose_accepted = false;
+  for(size_t i = 0; i < sensors_.size(); i++)
+  {
+    cell_x = randomNumber(0, map_.info.width -1);
+    cell_y = randomNumber(0, map_.info.height -1);
+    newPose.position.x = mapToWorldX(cell_x, map_);
+    newPose.position.y = mapToWorldY(cell_y, map_);
+    double alpha = randomNumber(-PI, PI);
+
+    if(targets_with_info_fix_.at(cell_y * map_.info.width + cell_x).occupied || targets_with_info_fix_.at(cell_y * map_.info.width + cell_x).forbidden)
+    {
+      pose_accepted = false; 
+    }
+    else
+    {
+      pose_accepted = true;
+    }
+
+    while(!pose_accepted)
+    {
+      cell_x = randomNumber(0, map_.info.width -1);
+      cell_y = randomNumber(0, map_.info.height -1);
+      newPose.position.x = mapToWorldX(cell_x, map_);
+      newPose.position.y = mapToWorldY(cell_y, map_);
+      double alpha = randomNumber(-PI, PI);
+
+      if(targets_with_info_fix_.at(cell_y * map_.info.width + cell_x).occupied || targets_with_info_fix_.at(cell_y * map_.info.width + cell_x).forbidden)
+      {
+        pose_accepted = false; 
+      }
+      else
+      {
+        pose_accepted = true;
+      }
+    }
+
+    sensors_.at(i).setSensorPose(newPose);
+    // update the target information
+    updateTargetsInfoRaytracing(i);
+
+  } // end for loop over sensors
+
+  // calculate new coverage
+  calcCoverage();
+  if(coverage_ == 0)
+  {
+    pers_best_coverage_ = coverage_;
+    pers_best_multiple_coverage_ = multiple_coverage_;
+    pers_best_ = sensors_;
+  }
+}
+
 // function to place all sensors at a given pose
 void particle::placeSensorsAtPos(geometry_msgs::Pose new_pose)
 {
