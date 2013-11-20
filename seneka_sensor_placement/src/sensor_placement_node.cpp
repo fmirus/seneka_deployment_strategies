@@ -80,12 +80,18 @@ sensor_placement_node::sensor_placement_node()
   ss_start_GS_ = nh_.advertiseService("StartGS", &sensor_placement_node::startGSCallback, this);
   ss_start_GS_with_offset_ = nh_.advertiseService("StartGS_with_offset_polygon", &sensor_placement_node::startGSCallback2, this);
   ss_clear_fa_vec_ = nh_.advertiseService("ClearForbiddenAreas", &sensor_placement_node::clearFACallback, this);
+  ss_stat_eval_ = nh_.advertiseService("StatisticalEvaluation", &sensor_placement_node::statEvaluationCallback, this);
 
   // ros service clients
   sc_get_map_ = nh_.serviceClient<nav_msgs::GetMap>("static_map");
 
   // get parameters from parameter server if possible
   getParams();
+
+  // clean up log file
+  std::string temp = log_file_path_ + log_file_name_;
+  log_file_.open(temp.c_str(), ios::trunc);
+  log_file_.close();
 
   // initialize best coverage
   best_cov_ = 0;
@@ -105,6 +111,7 @@ sensor_placement_node::sensor_placement_node()
   targets_saved_ = false;
   fa_received_ = false;
   polygon_offset_val_received_=false;
+  stat_eval_called_ = false;
 
 }
 
@@ -125,6 +132,18 @@ void sensor_placement_node::getParams()
     ROS_WARN("No parameter max_sensor_range on parameter server. Using default [5.0 in m]");
   }
   pnh_.param("max_sensor_range",sensor_range_,5.0);
+
+  if ( !pnh_.hasParam("log_file_name") ) 
+  {
+    ROS_WARN("No parameter log_file_name on parameter server. Using default [log_file.txt]");
+  }
+  pnh_.param("log_file_name", log_file_name_, std::string("log_file.txt"));
+
+  if ( !pnh_.hasParam("log_file_path") ) 
+  {
+    ROS_WARN("No parameter log_file_path on parameter server. Using default [./]");
+  }
+  pnh_.param("log_file_path", log_file_path_, std::string("./"));
 
   double open_angle_1, open_angle_2;
 
@@ -464,6 +483,17 @@ void sensor_placement_node::PSOptimize()
 
     ROS_INFO_STREAM("iteration: " << iter << " with coverage: " << best_cov_);
 
+    if(stat_eval_called_)
+    {
+      if(( iter % 20 ) == 0 )
+      {
+        std::string temp = log_file_path_ + log_file_name_;
+        log_file_.open(temp.c_str(), ios::out | ios::app);  
+        log_file_ << best_cov_ << " per cent coverage after iteration: " << iter << endl;
+        log_file_.close();
+      }     
+    }
+
     // increment PSO-iterator
     iter++;
   }
@@ -712,6 +742,142 @@ bool sensor_placement_node::testServiceCallback(std_srvs::Empty::Request& req, s
 
   return true;
 }
+
+// callback function for the statistical evaluation
+bool sensor_placement_node::statEvaluationCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
+{
+  stat_eval_called_ = true;
+  // setup log file
+  // clean up log file
+  std::string temp = log_file_path_ + log_file_name_;
+  ROS_INFO_STREAM("Log-file: " << temp);
+  log_file_.open(temp.c_str(), ios::trunc);
+  log_file_.close();
+  // create File header
+  log_file_.open(temp.c_str(), ios::out | ios::app);  
+  log_file_ << "================ PSO-Results ================" << endl;
+  log_file_ << "number of sensors: " << sensor_num_ << endl;
+  log_file_ << "max sensor range: " << sensor_range_ << endl;
+  log_file_ << "max linear sensor velocity: " << max_lin_vel_ << endl;
+  log_file_ << "max angular sensor velocity: " << max_ang_vel_ << endl;
+  log_file_ << "number of particles: " << particle_num_ << endl;
+  log_file_ << "maximum number of iterations: " << iter_max_ << endl;
+  log_file_ << "minimal coverage to stop: " << min_cov_ << "in percent" << endl;
+  log_file_ << "parameter c1=" << PSO_param_1_ << endl;
+  log_file_ << "parameter c2=" << PSO_param_2_ << endl;
+  log_file_ << "parameter c3=" << PSO_param_3_ << endl;
+  log_file_.close();
+
+  // call static_map-service from map_server to get the actual map
+  sc_get_map_.waitForExistence();
+
+  nav_msgs::GetMap srv_map;
+
+  if(sc_get_map_.call(srv_map))
+  {
+    ROS_INFO("Map service called successfully");
+    map_received_ = true;
+
+    if(AoI_received_)
+    {
+      // get bounding box of area of interest
+      geometry_msgs::Polygon bound_box = getBoundingBox2D(area_of_interest_.polygon, srv_map.response.map);
+      // cropMap to boundingBox
+      cropMap(bound_box, srv_map.response.map, map_);
+    }
+    else
+    {
+      map_ = srv_map.response.map;
+
+      // if no AoI was specified, we consider the whole map to be the AoI
+      area_of_interest_.polygon = getBoundingBox2D(geometry_msgs::Polygon(), map_);
+    }
+
+    // publish map
+    map_.header.stamp = ros::Time::now();
+    map_pub_.publish(map_);
+    map_meta_pub_.publish(map_.info);
+  }
+  else
+  {
+    ROS_INFO("Failed to call map service");
+  }
+
+  if(map_received_)
+  {
+    ROS_INFO("Received a map");
+
+    // now create the lookup table based on the range of the sensor and the resolution of the map
+    int radius_in_cells = floor(sensor_range_ / map_.info.resolution);
+    lookup_table_ = createLookupTableCircle(radius_in_cells);
+  }
+
+  ROS_INFO("getting targets from specified map and area of interest!");
+
+  targets_saved_ = getTargets();
+
+  if(targets_saved_)
+  {
+    ROS_INFO_STREAM("Saved " << target_num_ << " targets in std-vector");
+
+    ROS_INFO_STREAM("Saved " << targets_with_info_fix_.size() << " targets with info in std-vectors");
+  }
+
+  // loop to call PSO several times
+  for(int i=0; i<75; i++)
+  {
+    // create File header
+    log_file_.open(temp.c_str(), ios::out | ios::app);
+    log_file_ << "================================" << endl;
+    log_file_ << "Test-Run: " << i << endl;
+    log_file_.close();
+
+    ROS_INFO("Initializing particle swarm");
+    initializePSO();
+
+    // publish global best visualization
+    marker_array_pub_.publish(global_best_.getVisualizationMarkers());
+
+    ROS_INFO("Particle swarm Optimization step");
+    PSOptimize();
+
+    // get the PSO result as nav_msgs::Path in UTM coordinates and publish it
+    PSO_result_ = particle_swarm_.at(best_particle_index_).particle::getSolutionPositionsAsPath();
+
+    nav_path_pub_.publish(PSO_result_);
+
+    ROS_INFO_STREAM("Print the best solution as Path: " << PSO_result_);
+
+    // publish global best visualization
+    marker_array_pub_.publish(global_best_.getVisualizationMarkers());
+
+    ROS_INFO("Clean up everything");
+    particle_swarm_.clear();
+
+    best_cov_ = 0;
+    best_particle_index_ = 0;
+    global_best_multiple_coverage_ = 0;
+
+    ROS_INFO("PSO terminated successfully");
+  }
+
+  ROS_INFO("Clean up everything");
+  particle_swarm_.clear();
+
+  targets_with_info_fix_.clear();
+  targets_with_info_var_.clear();
+
+  target_num_ = 0;
+  best_cov_ = 0;
+  best_particle_index_ = 0;
+  global_best_multiple_coverage_ = 0;
+  targets_saved_ = false;
+  stat_eval_called_ = false;
+  
+}
+
+
+
 
 // get greedy search targets
 bool sensor_placement_node::getGSTargets()
