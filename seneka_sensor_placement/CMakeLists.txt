@@ -19,13 +19,15 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 add_service_files(
+  DIRECTORY
+    srv
   FILES
-  polygon_offset.srv
+    polygon_offset.srv
 )
 
 generate_messages(
   DEPENDENCIES
-  std_msgs
+    std_msgs
 )
 
 catkin_package(
@@ -33,7 +35,6 @@ catkin_package(
     include
     common/include
     third_party/clipper_library/include
-    CATKIN_DEPENDS message_runtime
 #  LIBRARIES seneka
   CATKIN_DEPENDS
     roslib
@@ -41,6 +42,7 @@ catkin_package(
     rosconsole
     std_msgs
     nav_msgs
+    message_runtime
     geometry_msgs
     visualization_msgs
     tf
@@ -51,11 +53,13 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 # include_directories(include ${catkin_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS})
-include_directories(include/sensor_placement
-  common/include/sensor_placement
+include_directories(
+  include/seneka_sensor_placement
+  common/include/seneka_sensor_placement
   third_party/clipper_library/include/clipper
   ${catkin_INCLUDE_DIRS}
 )
+
 
 ## Declare a cpp executable
 # add_executable(seneka_node src/seneka_node.cpp)

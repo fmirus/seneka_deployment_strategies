@@ -1463,7 +1463,7 @@ bool sensor_placement_node::startGSCallback(std_srvs::Empty::Request& req, std_s
 
 
 // callback function for the start GS service with offset parameter
-bool sensor_placement_node::startGSCallback2(sensor_placement::polygon_offset::Request& req, sensor_placement::polygon_offset::Response& res)
+bool sensor_placement_node::startGSCallback2(seneka_sensor_placement::polygon_offset::Request& req, seneka_sensor_placement::polygon_offset::Response& res)
 {
   // save offset value received
   clipper_offset_value_ = req.offset_value;

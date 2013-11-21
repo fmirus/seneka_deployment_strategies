@@ -82,7 +82,7 @@
 #include <seneka_utilities.h>
 #include <greedySearch.h>
 #include <clipper.hpp>
-#include <sensor_placement/polygon_offset.h>
+#include <seneka_sensor_placement/polygon_offset.h>
 
 using namespace std;
 using namespace seneka_utilities;
@@ -288,7 +288,7 @@ public:
   bool clearFACallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
 
   // callback function for the start GS service with offset parameter
-  bool startGSCallback2(sensor_placement::polygon_offset::Request& req, sensor_placement::polygon_offset::Response& res);
+  bool startGSCallback2(seneka_sensor_placement::polygon_offset::Request& req, seneka_sensor_placement::polygon_offset::Response& res);
 
   // callback function for the statistical evaluation
   bool statEvaluationCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
